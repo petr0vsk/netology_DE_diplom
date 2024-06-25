@@ -167,4 +167,32 @@ def process_data(file_path):
         'Time': 'time',
         'Payment': 'payment',
         'cogs': 'cost_of_goods_sold',
-        '
+        'gross margin percentage': 'gross_margin_percentage',
+        'gross income': 'gross_income',
+        'Rating': 'rating'
+    }, inplace=True)
+    df['date'] = pd.to_datetime(df['date'])
+    df['time'] = pd.to_datetime(df['time']).dt.time
+    
+    return df
+
+# Основная функция
+def main():
+    input_path = '/mnt/input/'
+    tar_path = '/mnt/tar/'
+    
+    # Создание таблиц
+    create_tables()
+    
+    # Обработка и загрузка данных
+    for file in glob.glob(os.path.join(input_path, '*.csv')):
+        df = process_data(file)
+        load_data_to_db(df)
+        
+        # Перемещение обработанного файла
+        base_name = os.path.basename(file)
+        new_name = f"{os.path.splitext(base_name)[0]}_tar.csv"
+        os.rename(file, os.path.join(tar_path, new_name))
+
+if __name__ == '__main__':
+    main()
