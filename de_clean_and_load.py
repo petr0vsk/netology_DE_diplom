@@ -1,15 +1,18 @@
-
 import pandas as pd
 import psycopg2
 import os
 import glob
+from dotenv import load_dotenv
 
-# Параметры подключения к базе данных PostgreSQL
-DB_NAME = 'your_db_name'
-DB_USER = 'your_db_user'
-DB_PASSWORD = 'your_db_password'
-DB_HOST = 'your_db_host'
-DB_PORT = 'your_db_port'
+# Загрузка переменных окружения из файла .env
+load_dotenv()
+
+# Параметры подключения к базе данных PostgreSQL из переменных окружения
+DB_NAME = os.getenv('DB_NAME')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+DB_HOST = os.getenv('DB_HOST')
+DB_PORT = os.getenv('DB_PORT')
 
 # Функция для подключения к базе данных PostgreSQL
 def connect_to_db():
@@ -21,6 +24,8 @@ def connect_to_db():
         port=DB_PORT
     )
     return conn
+
+# Остальная часть кода без изменений...
 
 # Функция для создания таблиц
 def create_tables():
@@ -162,32 +167,4 @@ def process_data(file_path):
         'Time': 'time',
         'Payment': 'payment',
         'cogs': 'cost_of_goods_sold',
-        'gross margin percentage': 'gross_margin_percentage',
-        'gross income': 'gross_income',
-        'Rating': 'rating'
-    }, inplace=True)
-    df['date'] = pd.to_datetime(df['date'])
-    df['time'] = pd.to_datetime(df['time']).dt.time
-    
-    return df
-
-# Основная функция
-def main():
-    input_path = '/mnt/input/'
-    tar_path = '/mnt/tar/'
-    
-    # Создание таблиц
-    create_tables()
-    
-    # Обработка и загрузка данных
-    for file in glob.glob(os.path.join(input_path, '*.csv')):
-        df = process_data(file)
-        load_data_to_db(df)
-        
-        # Перемещение обработанного файла
-        base_name = os.path.basename(file)
-        new_name = f"{os.path.splitext(base_name)[0]}_tar.csv"
-        os.rename(file, os.path.join(tar_path, new_name))
-
-if __name__ == '__main__':
-    main()
+        '
