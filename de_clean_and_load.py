@@ -121,7 +121,7 @@ def load_data_to_db(df):
 
     conn.commit()
 
-    # Вставка данных в таблицу Sales
+    # Вставка данных в таблицу Sales с использованием ON CONFLICT DO NOTHING
     for _, row in df.iterrows():
         cur.execute("""
             INSERT INTO Sales (invoice_id, branch_id, city_id, customer_id, product_line_id, unit_price, quantity, tax_5_percent, total, date, time, payment_id, cost_of_goods_sold, gross_margin_percentage, gross_income, rating)
@@ -135,6 +135,7 @@ def load_data_to_db(df):
                 (SELECT payment_id FROM Payment WHERE payment_type = %s LIMIT 1),
                 %s, %s, %s, %s
             )
+            ON CONFLICT (invoice_id) DO NOTHING
         """, (
             row['invoice_id'], row['branch'], row['city'], row['customer_type'], row['gender'], row['product_line'],
             row['unit_price'], row['quantity'], row['tax_5_percent'], row['total'], row['date'], row['time'], row['payment'],
