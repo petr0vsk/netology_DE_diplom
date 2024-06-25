@@ -25,8 +25,6 @@ def connect_to_db():
     )
     return conn
 
-# Остальная часть кода без изменений...
-
 # Функция для создания таблиц
 def create_tables():
     commands = (
@@ -103,34 +101,38 @@ def load_data_to_db(df):
     conn = connect_to_db()
     cur = conn.cursor()
 
-    # Вставка данных в таблицы
-    for _, row in df.iterrows():
-        # Вставка данных в таблицу Branch
-        cur.execute("INSERT INTO Branch (branch_name) VALUES (%s) ON CONFLICT (branch_name) DO NOTHING", (row['branch'],))
-        
-        # Вставка данных в таблицу City
-        cur.execute("INSERT INTO City (city_name) VALUES (%s) ON CONFLICT (city_name) DO NOTHING", (row['city'],))
-        
-        # Вставка данных в таблицу Customer
+    # Вставка уникальных значений в таблицы Branch, City, Customer, ProductLine, Payment
+    branch_unique = df[['branch']].drop_duplicates()
+    city_unique = df[['city']].drop_duplicates()
+    customer_unique = df[['customer_type', 'gender']].drop_duplicates()
+    product_line_unique = df[['product_line']].drop_duplicates()
+    payment_unique = df[['payment']].drop_duplicates()
+
+    for branch in branch_unique['branch']:
+        cur.execute("INSERT INTO Branch (branch_name) VALUES (%s) ON CONFLICT (branch_name) DO NOTHING", (branch,))
+    for city in city_unique['city']:
+        cur.execute("INSERT INTO City (city_name) VALUES (%s) ON CONFLICT (city_name) DO NOTHING", (city,))
+    for _, row in customer_unique.iterrows():
         cur.execute("INSERT INTO Customer (customer_type, gender) VALUES (%s, %s) ON CONFLICT DO NOTHING", (row['customer_type'], row['gender']))
-        
-        # Вставка данных в таблицу ProductLine
-        cur.execute("INSERT INTO ProductLine (product_line_name) VALUES (%s) ON CONFLICT (product_line_name) DO NOTHING", (row['product_line'],))
-        
-        # Вставка данных в таблицу Payment
-        cur.execute("INSERT INTO Payment (payment_type) VALUES (%s) ON CONFLICT (payment_type) DO NOTHING", (row['payment'],))
-        
-        # Вставка данных в таблицу Sales
+    for product_line in product_line_unique['product_line']:
+        cur.execute("INSERT INTO ProductLine (product_line_name) VALUES (%s) ON CONFLICT (product_line_name) DO NOTHING", (product_line,))
+    for payment in payment_unique['payment']:
+        cur.execute("INSERT INTO Payment (payment_type) VALUES (%s) ON CONFLICT (payment_type) DO NOTHING", (payment,))
+
+    conn.commit()
+
+    # Вставка данных в таблицу Sales
+    for _, row in df.iterrows():
         cur.execute("""
             INSERT INTO Sales (invoice_id, branch_id, city_id, customer_id, product_line_id, unit_price, quantity, tax_5_percent, total, date, time, payment_id, cost_of_goods_sold, gross_margin_percentage, gross_income, rating)
             VALUES (
                 %s,
-                (SELECT branch_id FROM Branch WHERE branch_name = %s),
-                (SELECT city_id FROM City WHERE city_name = %s),
-                (SELECT customer_id FROM Customer WHERE customer_type = %s AND gender = %s),
-                (SELECT product_line_id FROM ProductLine WHERE product_line_name = %s),
+                (SELECT branch_id FROM Branch WHERE branch_name = %s LIMIT 1),
+                (SELECT city_id FROM City WHERE city_name = %s LIMIT 1),
+                (SELECT customer_id FROM Customer WHERE customer_type = %s AND gender = %s LIMIT 1),
+                (SELECT product_line_id FROM ProductLine WHERE product_line_name = %s LIMIT 1),
                 %s, %s, %s, %s, %s, %s, 
-                (SELECT payment_id FROM Payment WHERE payment_type = %s),
+                (SELECT payment_id FROM Payment WHERE payment_type = %s LIMIT 1),
                 %s, %s, %s, %s
             )
         """, (
