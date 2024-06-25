@@ -1,3 +1,4 @@
+
 import pandas as pd
 import psycopg2
 import os
@@ -100,19 +101,19 @@ def load_data_to_db(df):
     # Вставка данных в таблицы
     for _, row in df.iterrows():
         # Вставка данных в таблицу Branch
-        cur.execute("INSERT INTO Branch (branch_name) VALUES (%s) ON CONFLICT (branch_name) DO NOTHING", (row['Branch'],))
+        cur.execute("INSERT INTO Branch (branch_name) VALUES (%s) ON CONFLICT (branch_name) DO NOTHING", (row['branch'],))
         
         # Вставка данных в таблицу City
-        cur.execute("INSERT INTO City (city_name) VALUES (%s) ON CONFLICT (city_name) DO NOTHING", (row['City'],))
+        cur.execute("INSERT INTO City (city_name) VALUES (%s) ON CONFLICT (city_name) DO NOTHING", (row['city'],))
         
         # Вставка данных в таблицу Customer
-        cur.execute("INSERT INTO Customer (customer_type, gender) VALUES (%s, %s) ON CONFLICT DO NOTHING", (row['Customer type'], row['Gender']))
+        cur.execute("INSERT INTO Customer (customer_type, gender) VALUES (%s, %s) ON CONFLICT DO NOTHING", (row['customer_type'], row['gender']))
         
         # Вставка данных в таблицу ProductLine
-        cur.execute("INSERT INTO ProductLine (product_line_name) VALUES (%s) ON CONFLICT (product_line_name) DO NOTHING", (row['Product line'],))
+        cur.execute("INSERT INTO ProductLine (product_line_name) VALUES (%s) ON CONFLICT (product_line_name) DO NOTHING", (row['product_line'],))
         
         # Вставка данных в таблицу Payment
-        cur.execute("INSERT INTO Payment (payment_type) VALUES (%s) ON CONFLICT (payment_type) DO NOTHING", (row['Payment'],))
+        cur.execute("INSERT INTO Payment (payment_type) VALUES (%s) ON CONFLICT (payment_type) DO NOTHING", (row['payment'],))
         
         # Вставка данных в таблицу Sales
         cur.execute("""
@@ -128,9 +129,9 @@ def load_data_to_db(df):
                 %s, %s, %s, %s
             )
         """, (
-            row['Invoice ID'], row['Branch'], row['City'], row['Customer type'], row['Gender'], row['Product line'],
-            row['Unit price'], row['Quantity'], row['Tax 5%'], row['Total'], row['Date'], row['Time'], row['Payment'],
-            row['cogs'], row['gross margin percentage'], row['gross income'], row['Rating']
+            row['invoice_id'], row['branch'], row['city'], row['customer_type'], row['gender'], row['product_line'],
+            row['unit_price'], row['quantity'], row['tax_5_percent'], row['total'], row['date'], row['time'], row['payment'],
+            row['cost_of_goods_sold'], row['gross_margin_percentage'], row['gross_income'], row['rating']
         ))
 
     conn.commit()
@@ -146,7 +147,25 @@ def process_data(file_path):
     df.drop_duplicates(inplace=True)  # Удаление дубликатов
     
     # Преобразование столбцов и типов данных
-    df.columns = df.columns.str.lower().str.replace(' ', '_')
+    df.rename(columns={
+        'Invoice ID': 'invoice_id',
+        'Branch': 'branch',
+        'City': 'city',
+        'Customer type': 'customer_type',
+        'Gender': 'gender',
+        'Product line': 'product_line',
+        'Unit price': 'unit_price',
+        'Quantity': 'quantity',
+        'Tax 5%': 'tax_5_percent',
+        'Total': 'total',
+        'Date': 'date',
+        'Time': 'time',
+        'Payment': 'payment',
+        'cogs': 'cost_of_goods_sold',
+        'gross margin percentage': 'gross_margin_percentage',
+        'gross income': 'gross_income',
+        'Rating': 'rating'
+    }, inplace=True)
     df['date'] = pd.to_datetime(df['date'])
     df['time'] = pd.to_datetime(df['time']).dt.time
     
