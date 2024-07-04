@@ -1,18 +1,36 @@
-
 import os
 import pandas as pd
 import psycopg2
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
-from airflow.sensors.external_task import ExternalTaskSensor
 from airflow.utils.dates import days_ago
 from datetime import timedelta
 import logging
 
+# Пути к входной и архивной директориям
 input_path = "/home/petr0vsk/WorkSQL/Diplom/input"
 tar_path = "/home/petr0vsk/WorkSQL/Diplom/tar"
 
+# Аргументы по умолчанию для DAG
+default_args = {
+    'owner': 'airflow',
+    'start_date': days_ago(1),
+    'email': ['petr0vskjy.aleksander@gmail.com'],
+    'email_on_failure': True,
+    'retries': 2,
+    'retry_delay': timedelta(minutes=5),
+}
+
+# Определение DAG
+dag = DAG(
+    'process_data_dag',
+    default_args=default_args,
+    description='Process data and load to PostgreSQL',
+    schedule_interval='@daily',
+)
+
+# Функция для подключения к базе данных
 def connect_to_db():
     logging.info("Connecting to the database...")
     pg_hook = PostgresHook(postgres_conn_id='postgres_default')
@@ -20,37 +38,48 @@ def connect_to_db():
     logging.info("Connection established.")
     return conn
 
+# Функция для создания таблиц в базе данных
 def create_tables():
     commands = (
         """
         CREATE TABLE IF NOT EXISTS Branch (
             branch_id SERIAL PRIMARY KEY,
-            branch_name VARCHAR(10) UNIQUE NOT NULL
+            branch_name VARCHAR(10) UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
         """
         CREATE TABLE IF NOT EXISTS City (
             city_id SERIAL PRIMARY KEY,
-            city_name VARCHAR(50) UNIQUE NOT NULL
+            city_name VARCHAR(50) UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
         """
         CREATE TABLE IF NOT EXISTS Customer (
             customer_id SERIAL PRIMARY KEY,
             customer_type VARCHAR(10) NOT NULL,
-            gender VARCHAR(10) NOT NULL
+            gender VARCHAR(10) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
         """
         CREATE TABLE IF NOT EXISTS ProductLine (
             product_line_id SERIAL PRIMARY KEY,
-            product_line_name VARCHAR(50) UNIQUE NOT NULL
+            product_line_name VARCHAR(50) UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
         """
         CREATE TABLE IF NOT EXISTS Payment (
             payment_id SERIAL PRIMARY KEY,
-            payment_type VARCHAR(20) UNIQUE NOT NULL
+            payment_type VARCHAR(20) UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """,
         """
@@ -71,11 +100,15 @@ def create_tables():
             cost_of_goods_sold NUMERIC(10, 2) NOT NULL,
             gross_margin_percentage NUMERIC(5, 2) NOT NULL,
             gross_income NUMERIC(10, 2) NOT NULL,
-            rating NUMERIC(3, 1) NOT NULL
+            rating NUMERIC(3, 1) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_transferred BOOLEAN DEFAULT FALSE
         )
         """
     )
 
+    # Подключение к базе данных и выполнение команд создания таблиц
     conn = connect_to_db()
     cur = conn.cursor()
     for command in commands:
@@ -84,36 +117,62 @@ def create_tables():
     cur.close()
     conn.close()
     logging.info("Tables created successfully.")
+    print("Tables created successfully.")
 
+# Функция для загрузки данных в базу данных
 def load_data_to_db(df):
     conn = connect_to_db()
     cur = conn.cursor()
 
     logging.info(f"Loading data to the database. Data shape: {df.shape}")
+    print(f"Loading data to the database. Data shape: {df.shape}")
     
+    # Уникальные значения для вставки в соответствующие таблицы
     branch_unique = df[['branch']].drop_duplicates()
     city_unique = df[['city']].drop_duplicates()
     customer_unique = df[['customer_type', 'gender']].drop_duplicates()
     product_line_unique = df[['product_line']].drop_duplicates()
     payment_unique = df[['payment']].drop_duplicates()
 
+    # Вставка уникальных значений в таблицы Branch, City, Customer, ProductLine, Payment
     for branch in branch_unique['branch']:
-        cur.execute("INSERT INTO Branch (branch_name) VALUES (%s) ON CONFLICT (branch_name) DO NOTHING", (branch,))
+        cur.execute("""
+            INSERT INTO Branch (branch_name) VALUES (%s) 
+            ON CONFLICT (branch_name) DO NOTHING
+        """, (branch,))
     for city in city_unique['city']:
-        cur.execute("INSERT INTO City (city_name) VALUES (%s) ON CONFLICT (city_name) DO NOTHING", (city,))
+        cur.execute("""
+            INSERT INTO City (city_name) VALUES (%s) 
+            ON CONFLICT (city_name) DO NOTHING
+        """, (city,))
     for _, row in customer_unique.iterrows():
-        cur.execute("INSERT INTO Customer (customer_type, gender) VALUES (%s, %s) ON CONFLICT DO NOTHING", (row['customer_type'], row['gender']))
+        cur.execute("""
+            INSERT INTO Customer (customer_type, gender) VALUES (%s, %s) 
+            ON CONFLICT DO NOTHING
+        """, (row['customer_type'], row['gender']))
     for product_line in product_line_unique['product_line']:
-        cur.execute("INSERT INTO ProductLine (product_line_name) VALUES (%s) ON CONFLICT (product_line_name) DO NOTHING", (product_line,))
+        cur.execute("""
+            INSERT INTO ProductLine (product_line_name) VALUES (%s) 
+            ON CONFLICT (product_line_name) DO NOTHING
+        """, (product_line,))
     for payment in payment_unique['payment']:
-        cur.execute("INSERT INTO Payment (payment_type) VALUES (%s) ON CONFLICT (payment_type) DO NOTHING", (payment,))
+        cur.execute("""
+            INSERT INTO Payment (payment_type) VALUES (%s) 
+            ON CONFLICT (payment_type) DO NOTHING
+        """, (payment,))
 
     conn.commit()
     logging.info("Inserted unique data into Branch, City, Customer, ProductLine, Payment tables.")
+    print("Inserted unique data into Branch, City, Customer, ProductLine, Payment tables.")
 
+    # Вставка данных в таблицу Sales
     for _, row in df.iterrows():
         cur.execute("""
-            INSERT INTO Sales (invoice_id, branch_id, city_id, customer_id, product_line_id, unit_price, quantity, tax_5_percent, total, date, time, payment_id, cost_of_goods_sold, gross_margin_percentage, gross_income, rating)
+            INSERT INTO Sales (
+                invoice_id, branch_id, city_id, customer_id, product_line_id, unit_price, quantity, 
+                tax_5_percent, total, date, time, payment_id, cost_of_goods_sold, 
+                gross_margin_percentage, gross_income, rating, created_at, updated_at, is_transferred
+            )
             VALUES (
                 %s,
                 (SELECT branch_id FROM Branch WHERE branch_name = %s LIMIT 1),
@@ -122,30 +181,36 @@ def load_data_to_db(df):
                 (SELECT product_line_id FROM ProductLine WHERE product_line_name = %s LIMIT 1),
                 %s, %s, %s, %s, %s, %s, 
                 (SELECT payment_id FROM Payment WHERE payment_type = %s LIMIT 1),
-                %s, %s, %s, %s
+                %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, FALSE
             )
             ON CONFLICT (invoice_id) DO NOTHING
         """, (
             row['invoice_id'], row['branch'], row['city'], row['customer_type'], row['gender'], row['product_line'],
             row['unit_price'], row['quantity'], row['tax_5_percent'], row['total'], row['date'], row['time'],
-            row['payment'],
-            row['cost_of_goods_sold'], row['gross_margin_percentage'], row['gross_income'], row['rating']
+            row['payment'], row['cost_of_goods_sold'], row['gross_margin_percentage'], row['gross_income'], row['rating']
         ))
 
     conn.commit()
     cur.close()
     conn.close()
     logging.info("Data committed to Sales table.")
+    print("Data committed to Sales table.")
 
+# Функция для обработки данных из CSV файла
 def process_data(file_path):
     logging.info(f"Processing file: {file_path}")
+    print(f"Processing file: {file_path}")
     df = pd.read_csv(file_path)
     logging.info(f"Initial dataframe shape: {df.shape}")
+    print(f"Initial dataframe shape: {df.shape}")
 
+    # Удаление пустых и дублированных строк
     df.dropna(inplace=True)
     df.drop_duplicates(inplace=True)
     logging.info(f"Cleaned dataframe shape: {df.shape}")
+    print(f"Cleaned dataframe shape: {df.shape}")
 
+    # Удаление BOM-символов и переименование столбцов
     df.columns = df.columns.str.replace('ï»¿', '')  # Удалить BOM-символы
     df.rename(columns={
         'Invoice ID': 'invoice_id',
@@ -170,12 +235,16 @@ def process_data(file_path):
     df['time'] = pd.to_datetime(df['time']).dt.time
 
     logging.info(f"Processed dataframe columns: {df.columns}")
+    print(f"Processed dataframe columns: {df.columns}")
     return df
 
+# Основная функция выполнения процесса
 def main(**kwargs):
     logging.info("Starting main function")
+    print("Starting main function")
     input_files = [f for f in os.listdir(input_path) if f.endswith('.csv')]
     logging.info(f"Input files: {input_files}")
+    print(f"Input files: {input_files}")
     create_tables()
     for file in input_files:
         full_file_path = os.path.join(input_path, file)
@@ -186,39 +255,11 @@ def main(**kwargs):
         new_name = f"{os.path.splitext(base_name)[0]}_tar.csv"
         os.rename(full_file_path, os.path.join(tar_path, new_name))
         logging.info(f"Moved file from {full_file_path} to {os.path.join(tar_path, new_name)}")
+        print(f"Moved file from {full_file_path} to {os.path.join(tar_path, new_name)}")
 
-default_args = {
-    'owner': 'airflow', 
-    'start_date': days_ago(1),
-    'email': ['petr0vskjy.aleksander@gmail.com'],
-    'email_on_failure': True,
-    'retries': 2,
-    'retry_delay': timedelta(minutes=5),
-}
-
-dag = DAG(
-    'process_data_dag',
-    default_args=default_args,
-    description='Process data and load to PostgreSQL',
-    schedule_interval='@daily',
-)
-
-wait_for_fetch_data = ExternalTaskSensor(
-    task_id='wait_for_fetch_data',
-    external_dag_id='fetch_data_dag',
-    external_task_id='fetch_data',
-    allowed_states=['success'],
-    failed_states=['failed'],
-    mode='poke',
-    poke_interval=30,
-    timeout=300,
-    dag=dag,
-)
-
+# Определение задачи для обработки данных
 process_data_task = PythonOperator(
     task_id='process_data',
     python_callable=main,
     dag=dag,
 )
-
-wait_for_fetch_data >> process_data_task
