@@ -44,42 +44,32 @@ def create_tables():
         """
         CREATE TABLE IF NOT EXISTS Branch (
             branch_id SERIAL PRIMARY KEY,
-            branch_name VARCHAR(10) UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            branch_name VARCHAR(10) UNIQUE NOT NULL
         )
         """,
         """
         CREATE TABLE IF NOT EXISTS City (
             city_id SERIAL PRIMARY KEY,
-            city_name VARCHAR(50) UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            city_name VARCHAR(50) UNIQUE NOT NULL
         )
         """,
         """
         CREATE TABLE IF NOT EXISTS Customer (
             customer_id SERIAL PRIMARY KEY,
             customer_type VARCHAR(10) NOT NULL,
-            gender VARCHAR(10) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            gender VARCHAR(10) NOT NULL
         )
         """,
         """
         CREATE TABLE IF NOT EXISTS ProductLine (
             product_line_id SERIAL PRIMARY KEY,
-            product_line_name VARCHAR(50) UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            product_line_name VARCHAR(50) UNIQUE NOT NULL
         )
         """,
         """
         CREATE TABLE IF NOT EXISTS Payment (
             payment_id SERIAL PRIMARY KEY,
-            payment_type VARCHAR(20) UNIQUE NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            payment_type VARCHAR(20) UNIQUE NOT NULL
         )
         """,
         """
@@ -101,8 +91,6 @@ def create_tables():
             gross_margin_percentage NUMERIC(5, 2) NOT NULL,
             gross_income NUMERIC(10, 2) NOT NULL,
             rating NUMERIC(3, 1) NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             is_transferred BOOLEAN DEFAULT FALSE
         )
         """
@@ -171,7 +159,7 @@ def load_data_to_db(df):
             INSERT INTO Sales (
                 invoice_id, branch_id, city_id, customer_id, product_line_id, unit_price, quantity, 
                 tax_5_percent, total, date, time, payment_id, cost_of_goods_sold, 
-                gross_margin_percentage, gross_income, rating, created_at, updated_at, is_transferred
+                gross_margin_percentage, gross_income, rating, is_transferred
             )
             VALUES (
                 %s,
@@ -181,7 +169,7 @@ def load_data_to_db(df):
                 (SELECT product_line_id FROM ProductLine WHERE product_line_name = %s LIMIT 1),
                 %s, %s, %s, %s, %s, %s, 
                 (SELECT payment_id FROM Payment WHERE payment_type = %s LIMIT 1),
-                %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, FALSE
+                %s, %s, %s, %s, FALSE
             )
             ON CONFLICT (invoice_id) DO NOTHING
         """, (
