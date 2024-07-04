@@ -1,43 +1,32 @@
--- Создание схемы базы данных DDS
 -- Создание таблицы измерений филиалов
 CREATE TABLE IF NOT EXISTS dim_branch (
     branch_id SERIAL PRIMARY KEY,
-    branch_name VARCHAR(10) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    branch_name VARCHAR(10) UNIQUE NOT NULL
 );
 
 -- Создание таблицы измерений городов
 CREATE TABLE IF NOT EXISTS dim_city (
     city_id SERIAL PRIMARY KEY,
-    city_name VARCHAR(50) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    city_name VARCHAR(50) UNIQUE NOT NULL
 );
 
 -- Создание таблицы измерений клиентов
 CREATE TABLE IF NOT EXISTS dim_customer (
     customer_id SERIAL PRIMARY KEY,
     customer_type VARCHAR(10) NOT NULL,
-    gender VARCHAR(10) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    gender VARCHAR(10) NOT NULL
 );
 
 -- Создание таблицы измерений продуктовых линеек
 CREATE TABLE IF NOT EXISTS dim_product_line (
     product_line_id SERIAL PRIMARY KEY,
-    product_line_name VARCHAR(50) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    product_line_name VARCHAR(50) UNIQUE NOT NULL
 );
 
 -- Создание таблицы измерений способов оплаты
 CREATE TABLE IF NOT EXISTS dim_payment (
     payment_id SERIAL PRIMARY KEY,
-    payment_type VARCHAR(20) UNIQUE NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    payment_type VARCHAR(20) UNIQUE NOT NULL
 );
 
 -- Создание таблицы измерений дат
@@ -48,9 +37,7 @@ CREATE TABLE IF NOT EXISTS dim_date (
     quarter INT NOT NULL,
     month INT NOT NULL,
     day INT NOT NULL,
-    day_of_week VARCHAR(10) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    day_of_week VARCHAR(10) NOT NULL
 );
 
 -- Создание таблицы измерений времени
@@ -59,9 +46,7 @@ CREATE TABLE IF NOT EXISTS dim_time (
     time TIME UNIQUE NOT NULL,
     hour INT NOT NULL,
     minute INT NOT NULL,
-    second INT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    second INT NOT NULL
 );
 
 -- Создание таблицы фактов продаж
@@ -82,7 +67,5 @@ CREATE TABLE IF NOT EXISTS fact_sales (
     cost_of_goods_sold NUMERIC(10, 2) NOT NULL,
     gross_margin_percentage NUMERIC(5, 2) NOT NULL,
     gross_income NUMERIC(10, 2) NOT NULL,
-    rating NUMERIC(3, 1) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    rating NUMERIC(3, 1) NOT NULL
 );
