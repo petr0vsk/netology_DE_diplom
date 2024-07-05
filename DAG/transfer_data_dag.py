@@ -1,363 +1,253 @@
+import os
+import pandas as pd
+import psycopg2
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.hooks.postgres_hook import PostgresHook
-from datetime import datetime, date, time
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.utils.dates import days_ago
+from datetime import timedelta
+import logging
 
+# Пути к входной и архивной директориям
+input_path = "/home/petr0vsk/WorkSQL/Diplom/input"
+tar_path = "/home/petr0vsk/WorkSQL/Diplom/tar"
+
+# Аргументы по умолчанию для DAG
 default_args = {
     'owner': 'airflow',
-    'start_date': datetime(2024, 7, 4),
-    'retries': 3,
+    'start_date': days_ago(1),
+    'email': ['petr0vskjy.aleksander@gmail.com'],
+    'email_on_failure': True,
+    'retries': 2,
+    'retry_delay': timedelta(minutes=5),
 }
 
+# Определение DAG
 dag = DAG(
-    'transfer_data_dag',
+    'process_data_dag',
     default_args=default_args,
-    description='Transfer data from NDS to DDS',
-    schedule_interval=None,
+    description='Process data and load to PostgreSQL',
+    schedule_interval='@daily',
 )
 
-def extract_updated_data(**kwargs):
-    nds_hook = PostgresHook(postgres_conn_id='nds_postgres')
-    nds_conn = nds_hook.get_conn()
-    nds_cursor = nds_conn.cursor()
-    
-    nds_cursor.execute("""
-        SELECT * FROM Sales WHERE is_transferred = FALSE
-    """)
-    sales = nds_cursor.fetchall()
-    
-    print(f"Extracted {len(sales)} rows from NDS.")
-    
-    serialized_sales = []
-    for sale in sales:
-        serialized_sale = tuple(
-            str(item) if isinstance(item, (datetime, date, time)) else item
-            for item in sale
+# Функция для подключения к базе данных
+def connect_to_db():
+    logging.info("Connecting to the database...")
+    pg_hook = PostgresHook(postgres_conn_id='postgres_default')
+    conn = pg_hook.get_conn()
+    logging.info("Connection established.")
+    return conn
+
+# Функция для создания таблиц в базе данных
+def create_tables():
+    commands = (
+        """
+        CREATE TABLE IF NOT EXISTS Branch (
+            branch_id SERIAL PRIMARY KEY,
+            branch_name VARCHAR(10) UNIQUE NOT NULL
         )
-        serialized_sales.append(serialized_sale)
-    
-    kwargs['ti'].xcom_push(key='updated_sales', value=serialized_sales)
-    nds_cursor.close()
-
-def load_dim_branch():
-    nds_hook = PostgresHook(postgres_conn_id='nds_postgres')
-    dds_hook = PostgresHook(postgres_conn_id='dds_postgres')
-    
-    nds_conn = nds_hook.get_conn()
-    nds_cursor = nds_conn.cursor()
-    nds_cursor.execute("SELECT DISTINCT branch_id, branch_name FROM Branch")
-    branches = nds_cursor.fetchall()
-    
-    dds_conn = dds_hook.get_conn()
-    dds_cursor = dds_conn.cursor()
-    insert_query = """
-        INSERT INTO dim_branch (branch_id, branch_name)
-        VALUES (%s, %s)
-        ON CONFLICT (branch_id) DO NOTHING
-    """
-    dds_cursor.executemany(insert_query, branches)
-    dds_conn.commit()
-    
-    nds_cursor.close()
-    dds_cursor.close()
-
-def load_dim_city():
-    nds_hook = PostgresHook(postgres_conn_id='nds_postgres')
-    dds_hook = PostgresHook(postgres_conn_id='dds_postgres')
-    
-    nds_conn = nds_hook.get_conn()
-    nds_cursor = nds_conn.cursor()
-    nds_cursor.execute("SELECT DISTINCT city_id, city_name FROM City")
-    cities = nds_cursor.fetchall()
-    
-    dds_conn = dds_hook.get_conn()
-    dds_cursor = dds_conn.cursor()
-    insert_query = """
-        INSERT INTO dim_city (city_id, city_name)
-        VALUES (%s, %s)
-        ON CONFLICT (city_id) DO NOTHING
-    """
-    dds_cursor.executemany(insert_query, cities)
-    dds_conn.commit()
-    
-    nds_cursor.close()
-    dds_cursor.close()
-
-def load_dim_customer():
-    nds_hook = PostgresHook(postgres_conn_id='nds_postgres')
-    dds_hook = PostgresHook(postgres_conn_id='dds_postgres')
-    
-    nds_conn = nds_hook.get_conn()
-    nds_cursor = nds_conn.cursor()
-    nds_cursor.execute("SELECT DISTINCT customer_id, customer_type, gender FROM Customer")
-    customers = nds_cursor.fetchall()
-    
-    dds_conn = dds_hook.get_conn()
-    dds_cursor = dds_conn.cursor()
-    insert_query = """
-        INSERT INTO dim_customer (customer_id, customer_type, gender)
-        VALUES (%s, %s, %s)
-        ON CONFLICT (customer_id) DO NOTHING
-    """
-    dds_cursor.executemany(insert_query, customers)
-    dds_conn.commit()
-    
-    nds_cursor.close()
-    dds_cursor.close()
-
-def load_dim_product_line():
-    nds_hook = PostgresHook(postgres_conn_id='nds_postgres')
-    dds_hook = PostgresHook(postgres_conn_id='dds_postgres')
-    
-    nds_conn = nds_hook.get_conn()
-    nds_cursor = nds_conn.cursor()
-    nds_cursor.execute("SELECT DISTINCT product_line_id, product_line_name FROM ProductLine")
-    product_lines = nds_cursor.fetchall()
-    
-    dds_conn = dds_hook.get_conn()
-    dds_cursor = dds_conn.cursor()
-    insert_query = """
-        INSERT INTO dim_product_line (product_line_id, product_line_name)
-        VALUES (%s, %s)
-        ON CONFLICT (product_line_id) DO NOTHING
-    """
-    dds_cursor.executemany(insert_query, product_lines)
-    dds_conn.commit()
-    
-    nds_cursor.close()
-    dds_cursor.close()
-
-def load_dim_payment():
-    nds_hook = PostgresHook(postgres_conn_id='nds_postgres')
-    dds_hook = PostgresHook(postgres_conn_id='dds_postgres')
-    
-    nds_conn = nds_hook.get_conn()
-    nds_cursor = nds_conn.cursor()
-    nds_cursor.execute("SELECT DISTINCT payment_id, payment_type FROM Payment")
-    payments = nds_cursor.fetchall()
-    
-    dds_conn = dds_hook.get_conn()
-    dds_cursor = dds_conn.cursor()
-    insert_query = """
-        INSERT INTO dim_payment (payment_id, payment_type)
-        VALUES (%s, %s)
-        ON CONFLICT (payment_id) DO NOTHING
-    """
-    dds_cursor.executemany(insert_query, payments)
-    dds_conn.commit()
-    
-    nds_cursor.close()
-    dds_cursor.close()
-
-def load_dim_date():
-    nds_hook = PostgresHook(postgres_conn_id='nds_postgres')
-    dds_hook = PostgresHook(postgres_conn_id='dds_postgres')
-    
-    nds_conn = nds_hook.get_conn()
-    nds_cursor = nds_conn.cursor()
-    nds_cursor.execute("SELECT DISTINCT date FROM Sales")
-    dates = nds_cursor.fetchall()
-    
-    dds_conn = dds_hook.get_conn()
-    dds_cursor = dds_conn.cursor()
-    
-    for date in dates:
-        year = date[0].year
-        quarter = (date[0].month - 1) // 3 + 1
-        month = date[0].month
-        day = date[0].day
-        day_of_week = date[0].strftime('%A')
-        
-        insert_query = """
-            INSERT INTO dim_date (date, year, quarter, month, day, day_of_week)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            ON CONFLICT (date) DO NOTHING
+        """,
         """
-        dds_cursor.execute(insert_query, (date[0], year, quarter, month, day, day_of_week))
-    
-    dds_conn.commit()
-    nds_cursor.close()
-    dds_cursor.close()
-
-def load_dim_time():
-    nds_hook = PostgresHook(postgres_conn_id='nds_postgres')
-    dds_hook = PostgresHook(postgres_conn_id='dds_postgres')
-    
-    nds_conn = nds_hook.get_conn()
-    nds_cursor = nds_conn.cursor()
-    nds_cursor.execute("SELECT DISTINCT time FROM Sales")
-    times = nds_cursor.fetchall()
-    
-    dds_conn = dds_hook.get_conn()
-    dds_cursor = dds_conn.cursor()
-    
-    for time in times:
-        hour = time[0].hour
-        minute = time[0].minute
-        second = time[0].second
-        
-        insert_query = """
-            INSERT INTO dim_time (time, hour, minute, second)
-            VALUES (%s, %s, %s, %s)
-            ON CONFLICT (time) DO NOTHING
+        CREATE TABLE IF NOT EXISTS City (
+            city_id SERIAL PRIMARY KEY,
+            city_name VARCHAR(50) UNIQUE NOT NULL
+        )
+        """,
         """
-        dds_cursor.execute(insert_query, (time[0], hour, minute, second))
-    
-    dds_conn.commit()
-    nds_cursor.close()
-    dds_cursor.close()
+        CREATE TABLE IF NOT EXISTS Customer (
+            customer_id SERIAL PRIMARY KEY,
+            customer_type VARCHAR(10) NOT NULL,
+            gender VARCHAR(10) NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS ProductLine (
+            product_line_id SERIAL PRIMARY KEY,
+            product_line_name VARCHAR(50) UNIQUE NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS Payment (
+            payment_id SERIAL PRIMARY KEY,
+            payment_type VARCHAR(20) UNIQUE NOT NULL
+        )
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS Sales (
+            sale_id SERIAL PRIMARY KEY,
+            invoice_id VARCHAR(20) UNIQUE NOT NULL,
+            branch_id INT REFERENCES Branch(branch_id),
+            city_id INT REFERENCES City(city_id),
+            customer_id INT REFERENCES Customer(customer_id),
+            product_line_id INT REFERENCES ProductLine(product_line_id),
+            unit_price NUMERIC(10, 2) NOT NULL,
+            quantity INT NOT NULL,
+            tax_5_percent NUMERIC(10, 2) NOT NULL,
+            total NUMERIC(10, 2) NOT NULL,
+            date DATE NOT NULL,
+            time TIME NOT NULL,
+            payment_id INT REFERENCES Payment(payment_id),
+            cost_of_goods_sold NUMERIC(10, 2) NOT NULL,
+            gross_margin_percentage NUMERIC(5, 2) NOT NULL,
+            gross_income NUMERIC(10, 2) NOT NULL,
+            rating NUMERIC(3, 1) NOT NULL,
+            is_transferred BOOLEAN DEFAULT FALSE
+        )
+        """
+    )
 
-def load_fact_sales(**kwargs):
-    sales = kwargs['ti'].xcom_pull(task_ids='extract_data', key='updated_sales')
-    
-    if not sales:
-        print("No sales data to load.")
-        return
-    
-    print(f"Sales data to load: {sales[:5]}")  # Печать первых 5 записей для отладки
+    # Подключение к базе данных и выполнение команд создания таблиц
+    conn = connect_to_db()
+    cur = conn.cursor()
+    for command in commands:
+        cur.execute(command)
+    conn.commit()
+    cur.close()
+    conn.close()
+    logging.info("Tables created successfully.")
+    print("Tables created successfully.")
 
-    dds_hook = PostgresHook(postgres_conn_id='dds_postgres')
-    dds_conn = dds_hook.get_conn()
-    dds_cursor = dds_conn.cursor()
+# Функция для загрузки данных в базу данных
+def load_data_to_db(df):
+    conn = connect_to_db()
+    cur = conn.cursor()
 
-    # Получение идентификаторов для дат и времени
-    date_map = {}
-    time_map = {}
-
-    dds_cursor.execute("SELECT date, date_id FROM dim_date")
-    for row in dds_cursor.fetchall():
-        date_map[row[0].isoformat()] = row[1]
+    logging.info(f"Loading data to the database. Data shape: {df.shape}")
+    print(f"Loading data to the database. Data shape: {df.shape}")
     
-    dds_cursor.execute("SELECT time, time_id FROM dim_time")
-    for row in dds_cursor.fetchall():
-        time_map[row[0].isoformat()] = row[1]
+    # Уникальные значения для вставки в соответствующие таблицы
+    branch_unique = df[['branch']].drop_duplicates()
+    city_unique = df[['city']].drop_duplicates()
+    customer_unique = df[['customer_type', 'gender']].drop_duplicates()
+    product_line_unique = df[['product_line']].drop_duplicates()
+    payment_unique = df[['payment']].drop_duplicates()
 
-    insert_query = """
-        INSERT INTO fact_sales (
-            sale_id, invoice_id, branch_id, city_id, customer_id, product_line_id, unit_price,
-            quantity, tax_5_percent, total, date_id, time_id, payment_id, cost_of_goods_sold,
-            gross_margin_percentage, gross_income, rating
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    
-    # Преобразование данных в нужный формат для executemany
-    formatted_sales = []
-    for sale in sales:
-        date_str = sale[10]
-        time_str = sale[11]
-        date_id = date_map.get(date_str)
-        time_id = time_map.get(time_str)
-        
-        if date_id is None or time_id is None:
-            print(f"Skipping sale {sale[0]} due to missing date or time mapping.")
-            continue
-        
-        formatted_sales.append((
-            sale[0], sale[1], sale[2], sale[3], sale[4], sale[5], sale[6], sale[7],
-            sale[8], sale[9], date_id, time_id, sale[12], sale[13], sale[14],
-            sale[15], sale[16]
+    # Вставка уникальных значений в таблицы Branch, City, Customer, ProductLine, Payment
+    for branch in branch_unique['branch']:
+        cur.execute("""
+            INSERT INTO Branch (branch_name) VALUES (%s) 
+            ON CONFLICT (branch_name) DO NOTHING
+        """, (branch,))
+    for city in city_unique['city']:
+        cur.execute("""
+            INSERT INTO City (city_name) VALUES (%s) 
+            ON CONFLICT (city_name) DO NOTHING
+        """, (city,))
+    for _, row in customer_unique.iterrows():
+        cur.execute("""
+            INSERT INTO Customer (customer_type, gender) VALUES (%s, %s) 
+            ON CONFLICT DO NOTHING
+        """, (row['customer_type'], row['gender']))
+    for product_line in product_line_unique['product_line']:
+        cur.execute("""
+            INSERT INTO ProductLine (product_line_name) VALUES (%s) 
+            ON CONFLICT (product_line_name) DO NOTHING
+        """, (product_line,))
+    for payment in payment_unique['payment']:
+        cur.execute("""
+            INSERT INTO Payment (payment_type) VALUES (%s) 
+            ON CONFLICT (payment_type) DO NOTHING
+        """, (payment,))
+
+    conn.commit()
+    logging.info("Inserted unique data into Branch, City, Customer, ProductLine, Payment tables.")
+    print("Inserted unique data into Branch, City, Customer, ProductLine, Payment tables.")
+
+    # Вставка данных в таблицу Sales
+    for _, row in df.iterrows():
+        cur.execute("""
+            INSERT INTO Sales (
+                invoice_id, branch_id, city_id, customer_id, product_line_id, unit_price, quantity, 
+                tax_5_percent, total, date, time, payment_id, cost_of_goods_sold, 
+                gross_margin_percentage, gross_income, rating, is_transferred
+            )
+            VALUES (
+                %s,
+                (SELECT branch_id FROM Branch WHERE branch_name = %s LIMIT 1),
+                (SELECT city_id FROM City WHERE city_name = %s LIMIT 1),
+                (SELECT customer_id FROM Customer WHERE customer_type = %s AND gender = %s LIMIT 1),
+                (SELECT product_line_id FROM ProductLine WHERE product_line_name = %s LIMIT 1),
+                %s, %s, %s, %s, %s, %s, 
+                (SELECT payment_id FROM Payment WHERE payment_type = %s LIMIT 1),
+                %s, %s, %s, %s, FALSE
+            )
+            ON CONFLICT (invoice_id) DO NOTHING
+        """, (
+            row['invoice_id'], row['branch'], row['city'], row['customer_type'], row['gender'], row['product_line'],
+            row['unit_price'], row['quantity'], row['tax_5_percent'], row['total'], row['date'], row['time'],
+            row['payment'], row['cost_of_goods_sold'], row['gross_margin_percentage'], row['gross_income'], row['rating']
         ))
 
-    try:
-        dds_cursor.executemany(insert_query, formatted_sales)
-        dds_conn.commit()
-        print(f"Successfully loaded {len(formatted_sales)} sales records into fact_sales.")
-    except Exception as e:
-        print(f"Error loading sales data: {e}")
-        raise
-    finally:
-        dds_cursor.close()
+    conn.commit()
+    cur.close()
+    conn.close()
+    logging.info("Data committed to Sales table.")
+    print("Data committed to Sales table.")
 
-    # Обновление флага is_transferred в NDS
-    nds_hook = PostgresHook(postgres_conn_id='nds_postgres')
-    nds_conn = nds_hook.get_conn()
-    nds_cursor = nds_conn.cursor()
-    
-    update_query = """
-        UPDATE Sales
-        SET is_transferred = TRUE
-        WHERE sale_id = %s
-    """
-    
-    sale_ids = [sale[0] for sale in sales]
-    
-    try:
-        nds_cursor.executemany(update_query, [(sale_id,) for sale_id in sale_ids])
-        nds_conn.commit()
-        print(f"Successfully updated is_transferred flag for {len(sale_ids)} records in NDS.")
-    except Exception as e:
-        print(f"Error updating is_transferred flag in NDS: {e}")
-        raise
-    finally:
-        nds_cursor.close()
+# Функция для обработки данных из CSV файла
+def process_data(file_path):
+    logging.info(f"Processing file: {file_path}")
+    print(f"Processing file: {file_path}")
+    df = pd.read_csv(file_path)
+    logging.info(f"Initial dataframe shape: {df.shape}")
+    print(f"Initial dataframe shape: {df.shape}")
 
+    # Удаление пустых и дублированных строк
+    df.dropna(inplace=True)
+    df.drop_duplicates(inplace=True)
+    logging.info(f"Cleaned dataframe shape: {df.shape}")
+    print(f"Cleaned dataframe shape: {df.shape}")
 
+    # Удаление BOM-символов и переименование столбцов
+    df.columns = df.columns.str.replace('ï»¿', '')  # Удалить BOM-символы
+    df.rename(columns={
+        'Invoice ID': 'invoice_id',
+        'Branch': 'branch',
+        'City': 'city',
+        'Customer type': 'customer_type',
+        'Gender': 'gender',
+        'Product line': 'product_line',
+        'Unit price': 'unit_price',
+        'Quantity': 'quantity',
+        'Tax 5%': 'tax_5_percent',
+        'Total': 'total',
+        'Date': 'date',
+        'Time': 'time',
+        'Payment': 'payment',
+        'cogs': 'cost_of_goods_sold',
+        'gross margin percentage': 'gross_margin_percentage',
+        'gross income': 'gross_income',
+        'Rating': 'rating'
+    }, inplace=True)
+    df['date'] = pd.to_datetime(df['date'])
+    df['time'] = pd.to_datetime(df['time']).dt.time
 
-load_dim_branch_task = PythonOperator(
-    task_id='load_dim_branch',
-    python_callable=load_dim_branch,
+    logging.info(f"Processed dataframe columns: {df.columns}")
+    print(f"Processed dataframe columns: {df.columns}")
+    return df
+
+# Основная функция выполнения процесса
+def main(**kwargs):
+    logging.info("Starting main function")
+    print("Starting main function")
+    input_files = [f for f in os.listdir(input_path) if f.endswith('.csv')]
+    logging.info(f"Input files: {input_files}")
+    print(f"Input files: {input_files}")
+    create_tables()
+    for file in input_files:
+        full_file_path = os.path.join(input_path, file)
+        df = process_data(full_file_path)
+        load_data_to_db(df)
+
+        base_name = os.path.basename(full_file_path)
+        new_name = f"{os.path.splitext(base_name)[0]}_tar.csv"
+        os.rename(full_file_path, os.path.join(tar_path, new_name))
+        logging.info(f"Moved file from {full_file_path} to {os.path.join(tar_path, new_name)}")
+        print(f"Moved file from {full_file_path} to {os.path.join(tar_path, new_name)}")
+
+# Определение задачи для обработки данных
+process_data_task = PythonOperator(
+    task_id='process_data',
+    python_callable=main,
     dag=dag,
 )
-
-load_dim_city_task = PythonOperator(
-    task_id='load_dim_city',
-    python_callable=load_dim_city,
-    dag=dag,
-)
-
-load_dim_customer_task = PythonOperator(
-    task_id='load_dim_customer',
-    python_callable=load_dim_customer,
-    dag=dag,
-)
-
-load_dim_product_line_task = PythonOperator(
-    task_id='load_dim_product_line',
-    python_callable=load_dim_product_line,
-    dag=dag,
-)
-
-load_dim_payment_task = PythonOperator(
-    task_id='load_dim_payment',
-    python_callable=load_dim_payment,
-    dag=dag,
-)
-
-load_dim_date_task = PythonOperator(
-    task_id='load_dim_date',
-    python_callable=load_dim_date,
-    dag=dag,
-)
-
-load_dim_time_task = PythonOperator(
-    task_id='load_dim_time',
-    python_callable=load_dim_time,
-    dag=dag,
-)
-
-# Задача для загрузки данных в таблицу фактов
-load_fact_sales_task = PythonOperator(
-    task_id='load_fact_sales',
-    python_callable=load_fact_sales,
-    provide_context=True,
-    dag=dag,
-)
-
-# Задача для извлечения данных из NDS
-extract_data_task = PythonOperator(
-    task_id='extract_data',
-    python_callable=extract_updated_data,
-    provide_context=True,
-    dag=dag,
-)
-
-# Последовательность выполнения задач
-extract_data_task >> [
-    load_dim_branch_task,
-    load_dim_city_task,
-    load_dim_customer_task,
-    load_dim_product_line_task,
-    load_dim_payment_task,
-    load_dim_date_task,
-    load_dim_time_task
-] >> load_fact_sales_task
