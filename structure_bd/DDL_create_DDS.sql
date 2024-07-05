@@ -69,3 +69,27 @@ CREATE TABLE IF NOT EXISTS fact_sales (
     gross_income NUMERIC(10, 2) NOT NULL,
     rating NUMERIC(3, 1) NOT NULL
 );
+-- Таблица для хранения истории загрузок
+CREATE TABLE IF NOT EXISTS load_history (
+    load_id SERIAL PRIMARY KEY,  -- Уникальный идентификатор загрузки
+    dag_id VARCHAR(255) NOT NULL,  -- Идентификатор DAG в Airflow
+    task_id VARCHAR(255) NOT NULL,  -- Идентификатор задачи в Airflow
+    start_time TIMESTAMP NOT NULL,  -- Время начала загрузки
+    end_time TIMESTAMP,  -- Время завершения загрузки
+    status VARCHAR(50) NOT NULL,  -- Статус загрузки (например, 'success', 'failed')
+    row_count INT,  -- Количество обработанных строк
+    error_message TEXT  -- Сообщение об ошибке в случае неудачи
+);
+
+-- Таблица для хранения статусов загрузок
+CREATE TABLE IF NOT EXISTS load_status (
+    load_status_id SERIAL PRIMARY KEY,  -- Уникальный идентификатор статуса загрузки
+    load_id INT REFERENCES load_history(load_id),  -- Ссылка на историю загрузки
+    status_time TIMESTAMP NOT NULL,  -- Время обновления статуса
+    status VARCHAR(50) NOT NULL,  -- Статус (например, 'started', 'in_progress', 'completed', 'failed')
+    message TEXT  -- Дополнительная информация о статусе
+);
+
+-- Индексы для оптимизации запросов к таблицам метаданных
+CREATE INDEX idx_load_history_dag_task ON load_history(dag_id, task_id);
+CREATE INDEX idx_load_status_load_id ON load_status(load_id);
