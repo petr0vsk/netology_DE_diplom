@@ -50,3 +50,23 @@ CREATE TABLE IF NOT EXISTS Sales (
     rating NUMERIC(3, 1) NOT NULL,  -- Рейтинг
     is_transferred BOOLEAN DEFAULT FALSE  -- Флаг, указывающий, была ли передана запись
 );
+-- Создание таблицы истории загрузок
+CREATE TABLE IF NOT EXISTS load_history (
+    load_id SERIAL PRIMARY KEY,
+    dag_id VARCHAR(255) NOT NULL,
+    task_id VARCHAR(255) NOT NULL,
+    start_time TIMESTAMP NOT NULL,
+    end_time TIMESTAMP,
+    status VARCHAR(50) NOT NULL,
+    row_count INT,
+    error_message TEXT
+);
+
+-- Создание таблицы статусов загрузок
+CREATE TABLE IF NOT EXISTS load_status (
+    load_status_id SERIAL PRIMARY KEY,
+    load_id INT REFERENCES load_history(load_id),
+    status_time TIMESTAMP NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    message TEXT
+);
