@@ -1,0 +1,175 @@
+{
+  "id": 632847,
+  "num_rows": 1000,
+  "file_format": "csv",
+  "name": "diplom_de_netology",
+  "include_header": true,
+  "columns": [
+    {
+      "name": "Invoice ID",
+      "null_percentage": 0,
+      "type": "Formula",
+      "value": "concat(pad(random(1,999)::text, 3, '0', 'left'), '-', pad(random(10,99)::text, 2, '0', 'left'), '-', pad(random(1000,9999)::text, 4, '0', 'left'))",
+      "formula": null
+    },
+    {
+      "name": "Branch",
+      "null_percentage": 0,
+      "type": "Custom List",
+      "values": [
+        "A",
+        "B",
+        "C"
+      ],
+      "selectionStyle": "random",
+      "distribution": null,
+      "formula": null
+    },
+    {
+      "name": "City",
+      "null_percentage": 0,
+      "type": "Custom List",
+      "values": [
+        "Yangon",
+        "Naypyitaw",
+        "Mandalay"
+      ],
+      "selectionStyle": "random",
+      "distribution": null,
+      "formula": null
+    },
+    {
+      "name": "Customer type",
+      "null_percentage": 0,
+      "type": "Custom List",
+      "values": [
+        "Member",
+        "Normal"
+      ],
+      "selectionStyle": "random",
+      "distribution": null,
+      "formula": null
+    },
+    {
+      "name": "Gender",
+      "null_percentage": 0,
+      "type": "Custom List",
+      "values": [
+        "Male",
+        "Female"
+      ],
+      "selectionStyle": "random",
+      "distribution": null,
+      "formula": null
+    },
+    {
+      "name": "Product line",
+      "null_percentage": 0,
+      "type": "Custom List",
+      "values": [
+        "Health and beauty",
+        "Electronic accessories",
+        "Home and lifestyle",
+        "Sports and travel",
+        "Food and beverages",
+        "Fashion accessories"
+      ],
+      "selectionStyle": "random",
+      "distribution": null,
+      "formula": null
+    },
+    {
+      "name": "Unit price",
+      "null_percentage": 0,
+      "type": "Number",
+      "min": 10,
+      "max": 100,
+      "decimals": 2,
+      "formula": null
+    },
+    {
+      "name": "Quantity",
+      "null_percentage": 0,
+      "type": "Number",
+      "min": 1,
+      "max": 10,
+      "decimals": 0,
+      "formula": null
+    },
+    {
+      "name": "Tax 5%",
+      "null_percentage": 0,
+      "type": "Formula",
+      "value": "this['Unit price'] * this['Quantity'] * 0.05",
+      "formula": null
+    },
+    {
+      "name": "Total",
+      "null_percentage": 0,
+      "type": "Formula",
+      "value": "this['Unit price'] * this['Quantity'] + this['Tax 5%']",
+      "formula": null
+    },
+    {
+      "name": "Date",
+      "null_percentage": 0,
+      "type": "Datetime",
+      "min": "02/01/2019",
+      "max": "04/29/2019",
+      "format": "%-m/%-d/%Y",
+      "formula": null
+    },
+    {
+      "name": "Time",
+      "null_percentage": 0,
+      "type": "Time",
+      "min": "6:00 AM",
+      "max": "11:55 PM",
+      "format": "%-H:%M",
+      "formula": null
+    },
+    {
+      "name": "Payment",
+      "null_percentage": 0,
+      "type": "Custom List",
+      "values": [
+        "Ewallet",
+        "Cash",
+        "Credit card"
+      ],
+      "selectionStyle": "random",
+      "distribution": null,
+      "formula": null
+    },
+    {
+      "name": "cogs",
+      "null_percentage": 0,
+      "type": "Formula",
+      "value": "round(field('Total') * 0.9524, 2)",
+      "formula": null
+    },
+    {
+      "name": "gross margin percentage",
+      "null_percentage": 0,
+      "type": "Formula",
+      "value": "round((field('Total') - field('cogs')) / field('Total') * 100, 2)",
+      "formula": null
+    },
+    {
+      "name": "gross income",
+      "null_percentage": 0,
+      "type": "Formula",
+      "value": "field('Total') - field('cogs')",
+      "formula": null
+    },
+    {
+      "name": "Rating",
+      "null_percentage": 0,
+      "type": "Number",
+      "min": 4,
+      "max": 10,
+      "decimals": 1,
+      "formula": null
+    }
+  ]
+}
