@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS dim_city (
 CREATE TABLE IF NOT EXISTS dim_customer (
     customer_id SERIAL PRIMARY KEY,
     customer_type VARCHAR(10) NOT NULL,
-    gender VARCHAR(10) NOT NULL
+    gender VARCHAR(10) NOT NULL,
+    UNIQUE (customer_type, gender)
 );
 
 -- Создание таблицы измерений продуктовых линеек
